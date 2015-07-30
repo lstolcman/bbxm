@@ -1,8 +1,18 @@
+import time, socket, os, threading
+
 IP = "localhost"
 PORT = 8080
 FILE = "plik.txt"
 
 class LedStatus(object):
+	def __init__(self, bin):
+		self.bin = bin
+		self.status = {0x02 : self.led_on(),
+					   0x01 : self.led_off(),
+					   0x03 : self.led_fast(),
+				       #default : self.led_slow(bin),}
+		self.status(bin)
+		
 	def led_off(self):
 		os.system("echo 1 > /sys/class/leds/beagleboard::usr0/brightness")
 
@@ -12,16 +22,16 @@ class LedStatus(object):
 	def led_slow(self):
 		while 1:
 			os.system("echo 1 > /sys/class/leds/beagleboard::usr0/brightness")
-			delay(1000ms)
+			time.sleep(2)
 			os.system("echo 0 > /sys/class/leds/beagleboard::usr0/brightness")
-			delay(1000ms)
+			time.sleep(2)
 	
 	def led_fast(self):
 		while 1:
 			os.system("echo 1 > /sys/class/leds/beagleboard::usr0/brightness")
-			delay(100ms)
+			time.sleep(0.5)
 			os.system("echo 0 > /sys/class/leds/beagleboard::usr0/brightness")
-			delay(100ms)
+			time.sleep(0.5)
 
 			
 			
@@ -35,11 +45,6 @@ class ClientUdp(object):
 	def open_socket(self):
 		self.__server_address = (self.__IP,self.__PORT)
 		self.__sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-		if self.__sock:
-			p
-			print("Open success")
-		else:
-			print ("Socket error")
 
 	def send_message(self,MSG):
 		sent = self.__sock.sendto(bytes(str(MSG),'UTF-8'), self.__server_address)
@@ -49,11 +54,11 @@ class ClientUdp(object):
 		data,server = self.__sock.recvfrom(1048)
 		(ID, HEADER) = struct.unpack('ic',data)
 		#print("ID: "+ ID + " ,HEADER: "+HEADER)
-		return (ID)
+		return (ID, HEADER)
 			
 	
 	
-class FileHandler(ClientUdp,Events):
+class FileHandler(ClientUdp):
 	def __init__(self,PATH):
 		self.client = ClientUdp()
 		self.event = Events()
@@ -80,64 +85,44 @@ class FileHandler(ClientUdp,Events):
 	
 	def close_file(self):
 		self.__file.close()	
-
-		
-		
-class Events(object):
-	def __init__(self):
-		self.__queue = []
-		self.__package = None
+	
+class MakeStructure():
+	def __init__(self,HEADER):
 		self.__id = 0
 		
-		self.led = LedStatus()
-		self.status = {0 : self.led.led_on,
-					   1 : self.led.led_off
-					   2 : self.led.led_fast,
-					   3 : self.led.led_slow,
-					   }
-
-	def append(self,aDATA):
-		self.__queue.append(aDATA)
-	
-	def pop(self):
-		return self.__queue.pop(0)
-	
-	def make_struct(self,HEADER):
+	def pack(self):
 		self.__id += self.__id
 		return (self.__id,struct.pack('ic',self.__id,HEADER))
-	
-	def get_status(self):
-		struct = make_struct(0x04)
-		send_message(struct[1])
+		
+		
+class ChangeStatus(threading.Thread,FileHandler,ClientUdp):
+	def __init__(self):
+		__struct = make_struct(0x03)
+		send_message(__struct[1])
 		rcv_id = read_message()
-		if rcv_id == struct[0]
+		if rcv_id[0] == struct[0] 
+		read_message()
+		
+		
+class GetStatus(threading.Thread,LedStatus, ClientUdp):
+	def __init__(self):	   
+		__struct = make_struct(0x04)
+		send_message(__struct[1])
+		rcv_id = read_message()
+		if rcv_id[0] == struct[0]
 			print("Status checked")
-			#CHANGE_LED_STATUS
-			
+			self.led = LedStatus(struct[1])	##??
 		else:
 			print("Incompatible ID")
-		
-	def change_status(self):
-		send_message(self.manager.make_pack(0x03))
-		read_message()
-		
-	
-	def response(self):
-		return read_message()
-		
-	def 
-		
-class Main(LedStatus):
-	def __init__(self):
-		
-	
-	
-	def thread1():
-		read_message()
-		
-		
-
+		time.sleep(5)
+			
 
   
 if __name__=="__main__":
+
+	thread1 = GetStatus()
+	thread1.start()
+	
+	
+	
 
