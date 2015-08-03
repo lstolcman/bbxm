@@ -21,6 +21,7 @@ outputQueue = queue.Queue()
 ledEvent = threading.Event()
 ledState = LedState.LED_OFF
 
+
 cfg = configparser.ConfigParser()
 
 
@@ -30,7 +31,7 @@ class Button():
 
     def loop(self):
         while 1:
-            pass
+            time.sleep(1)
 
 
 
@@ -60,18 +61,19 @@ class Led():
         while 1:
             if ledEvent.wait(self.delay): # event fired, change state
                 self.state = ledState
-            else: # no event, timeout passed, normal blink
                 if self.state is LedState.LED_FAST:
                     self.delay = self.fast
                 elif self.state is LedState.LED_SLOW:
                     self.delay = self.slow
-                elif self.state is LedState.LED_OFF:
-                    self.delay = None
-                    self.turnOff()
                 elif self.state is LedState.LED_ON:
                     self.delay = None
                     self.turnOn()
+                else: #LedState.LED_OFF
+                    self.delay = None
+                    self.turnOff()
 
+            else: # no event, timeout passed, normal blink
+                self.toggle()
 
 
 
@@ -85,11 +87,18 @@ class Packet():
     def __init__(self):
         self.packetNum = 0
         self.queue = False
+        self.packet = None
+
+    def parse(self):
+        pass
+
+    def getStatus(self):
+        if self.packet:
+            outputQueue.put((b'getStatus', self.packet[1]))
 
     def loop(self):
         while 1:
-            queue = inputQueue.get(block=True)
-            print(queue)
+            self.packet = inputQueue.get(block=True)
 
 
 
@@ -142,7 +151,8 @@ if __name__ == '__main__':
 
     print('mainloop')
     while 1:
-        pass
+        packet.getStatus()
+        time.sleep(1)
         '''
         Here:
         - check timeouts
