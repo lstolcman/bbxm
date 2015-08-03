@@ -1,64 +1,107 @@
-import socket, asyncore, struct
-
-BUTTON_USER_EVENT = "/dev/input/event1"
-
-class ReadButton(object):
-   def __init__(self, server_address, sock):
-      print("Start Read Button")
-      self.__sock = sock
-      self.__server_address = server_address
-      self.__file = open(BUTTON_USER_EVENT, "rb")
-      print("File opened")
-      if self.__file:
-         self.__event = self.__file.read(16)
-         self.read_event()
-      else:
-         return 0
-
-   def read_event(self):
-      print("Event reading")
-      while self.__event:
-          (time1, time2, type, code, value) = struct.unpack('iihhi', self.__event)
-          if type == 1 and code == 276 and value == 1:
-             sent = self.__sock.sendto(bytes(str(value),'UTF-8'), self.__server_address)
-             print ("Sent byte")  
-          data,server = self.__sock.recvfrom(2048)
-          print ("Recived " + data)
-      file.close()
-      return 1
+import struct
+import asyncore
+import socket
+import threading
+import queue
+import time
+import configparser
 
 
-class ClientUdp(ReadButton):
-   def __init__(self, IP, PORT):
-      print("StartUDP")                                
-      self.__IP = IP
-      self.__PORT = PORT
-      self.__sock = None
-      self.__server_address = (self.__IP,self.__PORT)
-      if self.open_socket():
-         self.ReadButton = ReadButton(self.__server_address, self.__sock)
-      else:
-         print("Cannot open socket")
-               
-   def open_socket(self):
-      self.__sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-      if self.__sock:
-         return True
-      else:
-         return False
-   
+inputQueue = queue.Queue()
+outputQueue = queue.Queue()
 
-class StartClient(ClientUdp):
-   def __init__(self,IP,PORT):
-      print("ClientInit")
-      self.__IP = IP
-      self.__PORT = PORT
-      self.ClientUdp = ClientUdp(self.__IP,self.__PORT)
-      
+cfg = configparser.ConfigParser()
 
-      
-if __name__=="__main__":
-   
-   StartClient("10.0.0.2",8080)
 
- 
+class Button():
+    def __init__(self, buttonPath=None):
+        pass
+
+    def waitForButton(self):
+        pass
+
+
+
+class Led():
+    def __init__(self, slow=0.5, fast=0.1, ledPath='/sys/class/leds/beagleboard::usr0/brightness'):
+        self.slow = slow
+        self.fast = fast
+
+    def toggle(self):
+        pass
+
+    def turnOn(self):
+        pass
+
+    def turnOff(self):
+        pass
+
+    def blinkSlow(self):
+        self.toggle()
+        time.sleep(self.slow)
+
+
+    def blinkFast(self):
+        self.toggle()
+        time.sleep(self.fast)
+
+
+
+class Packet():
+    '''Packet reader class
+
+    Tasks:
+    - get packet from queue
+    - put packet in queue
+    - manage LED change state (send new state to LED thread)'''
+    def __init__(self):
+        self.packetNum = 0
+
+
+
+class Async(asyncore.dispatcher):
+    '''Asynchronous socket handling'''
+    def __init__(self, host='localhost', port=9000):
+        asyncore.dispatcher.__init__(self)
+        self.create_socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.packet = Packet()
+        self.bind((host, port))
+
+    def writable(self):
+        return not outputQueue.empty()
+
+    def handle_close(self):
+        self.close()
+
+    def handle_read(self):
+        data = self.recvfrom(1024)
+        inputQueue.put(data)
+        print('handle_read: ', data)
+
+    def handle_write(self):
+        data = outputQueue.get()
+        sent = self.sendto(data[0], data[1])
+        print('handle_write:', data)
+
+
+
+if __name__ == '__main__':
+
+    cfg.read('settings.ini')
+
+    async = Async(cfg.get('Common', 'Host'), cfg.getint('Common', 'Port'))
+
+    asyncThread = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
+
+    asyncThread.start()
+
+
+    while 1:
+        pass
+        '''
+        Here:
+        - check timeouts
+        - send GetStatus beacon to slave
+        '''
+
+
