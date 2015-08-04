@@ -59,6 +59,7 @@ if __name__ == '__main__':
     async = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
     async.start()
 
+    client.sendStatus()
     while 1:
-        client.sendStatus()
+        #client.sendStatus()
         time.sleep(5)

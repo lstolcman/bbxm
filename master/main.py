@@ -106,19 +106,35 @@ class Packet():
         self.packet = None
 
     def parse(self):
-        pass
+        packetType = self.packet[0][0]
+        packetNum = self.packet[0][1]
+        if packetType is 0x01: #STATUS
+            packetState = self.packet[0][2]
+            outputQueue.put((struct.pack('!BB', 0x02, self.packetNum), self.packet[1]))
+            print('received status: ', end='')
+            if packetState is 0x01: #U-Boot
+                print('U-Boot')
+            elif packetState is 0x02: #Linux
+                print('Linux')
+            else:
+                print('Unknown')
+        elif packetType is 0x02: #RESPONSE
+            printf('received response')
+        else: #unknown
+            raise TypeError('Unsupported header')
 
     def getStatus(self):
         if self.packet:
-            outputQueue.put((b'getStatus', self.packet[1]))
+            outputQueue.put((struct.pack('!BB', 0x04, self.packetNum), self.packet[1]))
 
     def changeState(self):
         if self.packet:
-            outputQueue.put((b'changeState', self.packet[1]))
+            outputQueue.put((struct.pack('!BB', 0x03, self.packetNum), self.packet[1]))
 
     def loop(self):
         while 1:
             self.packet = inputQueue.get(block=True)
+            self.parse()
 
 
 
@@ -172,7 +188,7 @@ if __name__ == '__main__':
 
     print('mainloop')
     while 1:
-        packet.getStatus()
+        #packet.getStatus()
         time.sleep(1)
         '''
         Here:
