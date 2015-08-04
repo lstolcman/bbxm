@@ -39,13 +39,13 @@ class Client(asyncore.dispatcher):
             q_out.put(struct.pack('!BBB', 0x01, data[1], 0x02)) # LINUX
             #q.put(struct.pack('!BBB', 0x01, data[1], 0x01)) # UBOOT      
 
-        elif data[0] is 0x03:
+        if data[0] is 0x03:
             print("Change status")
             q_out.put(struct.pack('!BB', 0x02, data[1]))
             time.sleep(10)#restart
             q_out.put(struct.pack('!BBB', 0x01, data[1]), 0x01)
             
-        elif data[0] is 0x02: 
+        if data[0] is 0x02: 
             print("Server has response")
 
     def handle_write(self):
@@ -64,8 +64,9 @@ if __name__ == '__main__':
 
     cfg.read('settings.ini')
 
-    client = Client(cfg.get('Common', 'Host'), cfg.getint('Common', 'Port'))
-    async = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
-    async.start()
-  
+    #client = Client(cfg.get('Common', 'Host'), cfg.getint('Common', 'Port'))
+    #async = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
+    #async.start()
+    p = Client('localhost',9000)
+    asyncore.loop()
 
