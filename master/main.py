@@ -6,6 +6,7 @@ import queue
 import time
 import configparser
 import enum
+import struct
 
 
 class LedState(enum.Enum):
@@ -27,11 +28,23 @@ cfg = configparser.ConfigParser()
 
 class Button():
     def __init__(self, buttonPath='/tmp/test'):
-        self.button = open(buttonPath, 'r')
+        self.button = None
+        self.buttonPath = buttonPath
 
     def loop(self):
-        while 1:
-            time.sleep(1)
+        with open(self.buttonPath, 'rb') as self.button:
+            while 1:
+                evt = self.button.read(struct.calcsize('llHHI'))
+                while evt:
+                    tv_sec, tv_usec, key_type, key_code, key_value = struct.unpack('llHHI', evt)
+                    if key_type == 1 and key_code == 276 and key_value == 0:
+                        print(evt)
+                        print(tv_sec, tv_usec, key_type, key_code, key_value)
+                        print('user key released')
+                    evt = self.button.read(struct.calcsize('llHHI'))
+
+
+
 
 
 
@@ -42,6 +55,9 @@ class Led():
         self.fast = fast
         self.delay = self.fast
         self.state = LedState.LED_FAST
+
+    def __del__(self):
+        self.led.close()
 
     def toggle(self):
         if self.state is 1:
@@ -96,6 +112,10 @@ class Packet():
         if self.packet:
             outputQueue.put((b'getStatus', self.packet[1]))
 
+    def changeState(self):
+        if self.packet:
+            outputQueue.put((b'changeState', self.packet[1]))
+
     def loop(self):
         while 1:
             self.packet = inputQueue.get(block=True)
@@ -134,13 +154,14 @@ if __name__ == '__main__':
 
     async = Async(cfg.get('Common', 'Host'), cfg.getint('Common', 'Port'))
     packet = Packet()
+    #button = Button(cfg.get('Common', 'ButtonPath'))
     button = Button()
+    #led = Led(cfg.get('Common', 'LedPath'))
     led = Led()
 
     asyncThread = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
     packetThread = threading.Thread(target=packet.loop)
     buttonThread = threading.Thread(target=button.loop)
-    #ledThread = threading.Thread(target=led.loop, args=cfg.get('Common', 'LedPath'))
     ledThread = threading.Thread(target=led.loop)
 
     asyncThread.start()
