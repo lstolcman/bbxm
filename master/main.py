@@ -23,6 +23,7 @@ ledEvent = threading.Event()
 ledState = LedState.LED_OFF
 
 
+
 cfg = configparser.ConfigParser()
 
 
@@ -33,15 +34,14 @@ class Button():
 
     def loop(self):
         with open(self.buttonPath, 'rb') as self.button:
-            while 1:
+            evt = self.button.read(struct.calcsize('llHHI'))
+            while evt:
+                tv_sec, tv_usec, key_type, key_code, key_value = struct.unpack('llHHI', evt)
+                if key_type == 1 and key_code == 276 and key_value == 0:
+                    print(evt)
+                    print(tv_sec, tv_usec, key_type, key_code, key_value)
+                    print('user key released')
                 evt = self.button.read(struct.calcsize('llHHI'))
-                while evt:
-                    tv_sec, tv_usec, key_type, key_code, key_value = struct.unpack('llHHI', evt)
-                    if key_type == 1 and key_code == 276 and key_value == 0:
-                        print(evt)
-                        print(tv_sec, tv_usec, key_type, key_code, key_value)
-                        print('user key released')
-                    evt = self.button.read(struct.calcsize('llHHI'))
 
 
 
@@ -67,11 +67,9 @@ class Led():
 
     def turnOn(self):
         self.led.write('1')
-        self.state = 1
 
     def turnOff(self):
         self.led.write('0')
-        self.state = 0
 
     def loop(self):
         while 1:
@@ -84,9 +82,11 @@ class Led():
                 elif self.state is LedState.LED_ON:
                     self.delay = None
                     self.turnOn()
-                else: #LedState.LED_OFF
+                elif self.state is LedState.LED_OFF:
                     self.delay = None
                     self.turnOff()
+                else:
+                    raise Exception('Unknown LED state')
 
             else: # no event, timeout passed, normal blink
                 self.toggle()
@@ -119,7 +119,7 @@ class Packet():
             else:
                 print('Unknown')
         elif packetType is 0x02: #RESPONSE
-            printf('received response')
+            print('received response')
         else: #unknown
             raise TypeError('Unsupported header')
 

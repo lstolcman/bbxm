@@ -46,9 +46,14 @@ class Client(asyncore.dispatcher):
         print('handle_write:', self.buf)
         self.buf = self.buf[sent:]
 
-    def sendStatus(self):
+    def sendStatusUBoot(self):
         q.put(struct.pack('!BBB', 0x01, self.packetNum, 0x01))
         self.packetNum += 1
+    def sendStatusLinux(self):
+        q.put(struct.pack('!BBB', 0x01, self.packetNum, 0x02))
+        self.packetNum += 1
+    def sendResponse(self):
+        q.put(struct.pack('!BB', 0x02, self.packetNum))
 
 
 if __name__ == '__main__':
@@ -59,7 +64,30 @@ if __name__ == '__main__':
     async = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
     async.start()
 
-    client.sendStatus()
+
+
+
+    #client.sendStatusUBoot()
+
+
+
+
     while 1:
+        print('1. wyslij status uboot')
+        print('2. wyslij status linux')
+        print('3. wyslij response')
+        data = int(input('wybor:\n'))
+        if data is 1:
+            client.sendStatusUBoot()
+        elif data is 2:
+            client.sendStatusLinux()
+        elif data is 3:
+            client.sendResponse()
+        else:
+            print('1. wyslij status uboot')
+            print('2. wyslij status linux')
+            print('3. wyslij response')
+            data = int(input('wybor:\n'))
         #client.sendStatus()
-        time.sleep(5)
+        #time.sleep(5)
+
