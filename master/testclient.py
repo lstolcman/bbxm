@@ -8,65 +8,75 @@ import configparser
 
 
 
-q_out = queue.Queue()
+inputQueue = queue.Queue()
+outputQueue = queue.Queue()
+
 cfg = configparser.ConfigParser()
+
+class Packet():
+    def __init__(self):
+        self.packet = None
+
+    def parse(self,packetType):
+        if packetType is 0x02:
+            print("Server response")
+
+        if packetType is 0x03:
+            print("Change status")
+            outputQueue.put((struct.pack('!BBB', 0x01, self.packet[0][1], 0x02)))
+            #outputQueue.put((struct.pack('!BBB', 0x01, self.packetNum, 0x01), self.packet[1]))
+            
+        if packetType is 0x04:
+            print("Get status")
+            outputQueue.put((struct.pack('!BBB', 0x01, self.packet[0][1], 0x01)))         
+
+    def loop(self):
+        while 1:
+            self.packet = inputQueue.get(block=True)
+            self.parse(self.packet[0][0])
+
 
 class Client(asyncore.dispatcher):
     def __init__(self, host='localhost', port=0):
         asyncore.dispatcher.__init__(self)
         self.create_socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.connect((host, port))
-        q_out.queue.clear()
-        self.buf = ''
-        self.packetNum = 0
+        outputQueue.queue.clear()
+        self.packet = Packet()
         self.send_status()
 
-        '''(struct.pack('!BB', task, self.packetNum)),('localhost',9000)'''
-        
     def writable(self):
-        if q_out.empty():
-            return False
-        else:
-            self.buf = q_out.get_nowait()
-            return True
+        return not outputQueue.empty()
 
     def handle_read(self):
-        data, server = self.recvfrom(1024)
-        self.packetNum = data[1]
+        data = self.recvfrom(1024)
+        print("Handle read ", data[0])
+        inputQueue.put(data)
         
-        if data[0] is 0x04:
-            print("Get status")
-            q_out.put(struct.pack('!BBB', 0x01, data[1], 0x02)) # LINUX
-            #q.put(struct.pack('!BBB', 0x01, data[1], 0x01)) # UBOOT      
-
-        if data[0] is 0x03:
-            print("Change status")
-            q_out.put(struct.pack('!BB', 0x02, data[1]))
-            time.sleep(10)#restart
-            q_out.put(struct.pack('!BBB', 0x01, data[1]), 0x01)
-            
-        if data[0] is 0x02: 
-            print("Server has response")
-
     def handle_write(self):
-        sent = self.send(self.buf)
-        print('handle_write:', self.buf)
-        self.buf = self.buf[sent:]
+        data = outputQueue.get()
+        print("Handle write ", data)
+        sent = self.send(data)      
+        data = data[sent:]
 
     def send_status(self):
-        sent = self.sendto(struct.pack('!BBB', 0x01, self.packetNum, 0x01),('localhost',9000))
-        print('Try to connect server:', self.buf)
-        self.buf = self.buf[sent:]
+        outputQueue.put((struct.pack('!BBB', 0x01, 0, 0x01)))
+
        
         
 
 if __name__ == '__main__':
 
     cfg.read('settings.ini')
+    
+    client = Client(cfg.get('Common', 'Host'), cfg.getint('Common', 'Port'))
+    async = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
+    async.start()
+    
+    packet = Packet()
+    packetThread = threading.Thread(target=packet.loop)
+    packetThread.start()
+    
 
-    #client = Client(cfg.get('Common', 'Host'), cfg.getint('Common', 'Port'))
-    #async = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
-    #async.start()
-    p = Client('localhost',9000)
-    asyncore.loop()
+
 

@@ -5,6 +5,10 @@ import threading
 import queue
 import time
 import configparser
+import enum
+import struct
+
+
 
 
 inputQueue = queue.Queue()
@@ -14,15 +18,12 @@ cfg = configparser.ConfigParser()
 
 class Button():
     def __init__(self):
-        self.__path = buttonPath
+        self.__PATH = "/dev/input/event0"
         self.__file = None
         self.__event = None
         self.packet = Packet()
-        self.open_file()
-
-
-
-    def read_file(self):
+   
+    def loop(self):
         self.__file = open(self.__PATH, "rb")
         if self.__file:
             self.__event = self.__file.read(16)
@@ -30,60 +31,56 @@ class Button():
                 (time1, time2, type, code, value) = struct.unpack('iihhi', self.__event)
                 if type == 1 and code == 276 and value == 1:
                     print("Button pressed")
-                    self.packet.put_packet(0x03)###
-                self.__file.close()
-    '''
-    def fun_test(self):
-        while 1:
-            x = input("[x]")
-            if x == 'x':
-                self.packet.put_packet(0x03)
-   ''' 
+                    self.packet.put_packet(0x03)
+                self.__event = self.__file.read(16)
+            self.__file.close()
+
 class Packet():
     def __init__(self):
         self.packetNum = 0
-        self.address = None
-        self.data = None
-   
-    def get_packet(self):
-        packet = inputQueue.get()
-        self.address = packet[1]
-        self.data = packet[0]
-        return self.data
+        self.packet = None
 
-    def put_packet(self, task):
-        outputQueue.put(struct.pack('!BB', task, self.packetNum))
-        self.packetNum += 1
+    def parse(self,packetType):
 
-    def parse(self, state):
-        if state is 0x01:
-            print("Client status", self.data[2])
-            
-        if state is 0x02:
+        if packetType is 0x01:
+            print("Client status")
+            if self.packet[0][2] is 0x01: #U-Boot                               
+                print('U-Boot')
+            elif self.packet[0][2] is 0x02: #Linux                              
+                print('Linux')
+
+        if packetType is 0x02:
             print("Client response")
 
-        if state is 0x03:
+        if packetType is 0x03:
             print("Change status")
-            self.put_packet(0x03)
-            
-        if state is 0x04:
+            if self.packet:
+                self.packer(0x03)
+                
+        if packetType is 0x04:
             print("Get status")
-            self.put_packet(0x04)
+            if self.packet:
+                self.packer(0x04)
+
+    def packer(self, bit):
+        outputQueue.put((struct.pack('!BB', bit, self.packetNum), self.packet[1]))
+        self.packetNum += 1
         
+    def loop(self):                       
+        while 1:
+            self.packet = inputQueue.get()
+            self.parse(self.packet[0][0])
+            
 class Async(asyncore.dispatcher):
-    def __init__(self, host='localhost', port=9000):
+    '''Asynchronous socket handling'''
+    def __init__(self, host='localhost', port=9000):                            
         asyncore.dispatcher.__init__(self)
         self.create_socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.packet = Packet()
+        self.packet = Packet()    
         self.bind((host, port))
-        self.buf=''
-        self.client = None
 
     def writable(self):
-        if outputQueue.empty():
-            return False
-        else:
-            return True
+        return not outputQueue.empty()
 
     def handle_close(self):
         self.close()
@@ -91,34 +88,33 @@ class Async(asyncore.dispatcher):
     def handle_read(self):
         data = self.recvfrom(1024)
         inputQueue.put(data)
-        self.client = data[1]##
-        self.packet.parse(self.packet.get_packet()[0])        
+        print('handle_read: ', data[0])
 
     def handle_write(self):
-        if self.client:
-            data = outputQueue.get()
-            sent = self.sendto(data,self.client)##
-            print('ID:', data[1],' task:',data[0])
-            self.buf = self.buf[sent:]
+        data = outputQueue.get()
+        sent = self.sendto(data[0], data[1])
+        print('handle_write:', data[0])
 
 
 
 if __name__ == '__main__':
 
     cfg.read('settings.ini')
-    
+
     async = Async(cfg.get('Common', 'Host'), cfg.getint('Common', 'Port'))
-    asyncThread = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
-    asyncThread.start()
-
-    async_b = Button()
-    async_bThread = threading.Thread(target=async_b.fun_test)
-    async_bThread.start()
+    packet = Packet()
+    #button = Button()
     
-    g_stat = Packet()
+    asyncThread = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
+    packetThread = threading.Thread(target=packet.loop)
+    #buttonThread = threading.Thread(target=button.loop)
+    
+    asyncThread.start()
+    packetThread.start()
+    #buttonThread.start()
+
+
+    print('mainloop')
     while 1:
-        g_stat.parse(0x04)
-        time.sleep(10)
-
-
-
+        packet.parse(0x04)
+        time.sleep(3)
