@@ -11,17 +11,21 @@ import struct
 
 
 class LedState(enum.Enum):
-    LED_OFF = 0
-    LED_ON = 1
-    LED_FAST = 2
-    LED_SLOW = 3
+    OFF = 0
+    ON = 1
+    FAST = 2
+    SLOW = 3
+
+class SystemState(enum.Enum):
+    OFF = 0
+    UBOOT = 1
+    LINUX = 2
 
 
 inputQueue = queue.Queue()
 outputQueue = queue.Queue()
 
-ledEvent = threading.Event()
-ledState = LedState.LED_OFF
+ledState = queue.Queue()
 
 
 
@@ -40,6 +44,7 @@ class Button():
             while evt:
                 tv_sec, tv_usec, key_type, key_code, key_value = struct.unpack('llHHI', evt)
                 if key_type == 1 and key_code == 276 and key_value == 0:
+                    ledState.put(LedState.OFF)
                     print(evt)
                     print(tv_sec, tv_usec, key_type, key_code, key_value)
                     print('user key released')
@@ -55,8 +60,9 @@ class Led():
         self.led = open(ledPath, 'w')
         self.slow = slow
         self.fast = fast
-        self.delay = self.fast
+        self.delay = None
         self.value = 0
+        self.state = LedState.OFF
 
     def __del__(self):
         self.led.close()
@@ -79,22 +85,25 @@ class Led():
 
     def loop(self):
         while 1:
-            if ledEvent.wait(self.delay): # event fired, change state
-                if ledState == LedState.LED_FAST:
+            try:
+                self.state = ledState.get(block=True, timeout=self.delay)
+            except: # queue empty, timeout passed, normal blink
+                self.toggle()
+            else: # change state as in queue
+                if self.state == LedState.FAST:
                     self.delay = self.fast
-                elif ledState == LedState.LED_SLOW:
+                elif self.state == LedState.SLOW:
                     self.delay = self.slow
-                elif ledState == LedState.LED_ON:
+                elif self.state == LedState.ON:
                     self.delay = None
                     self.turnOn()
-                elif ledState == LedState.LED_OFF:
+                elif self.state == LedState.OFF:
                     self.delay = None
                     self.turnOff()
                 else:
                     raise Exception('Unknown LED state')
 
-            else: # no event, timeout passed, normal blink
-                self.toggle()
+           
 
 
 
