@@ -51,40 +51,43 @@ class Button():
 
 
 class Led():
-    def __init__(self, ledPath, slow=0.5, fast=0.1):
+    def __init__(self, ledPath, slow=0.15, fast=0.05):
         self.led = open(ledPath, 'w')
         self.slow = slow
         self.fast = fast
         self.delay = self.fast
-        self.state = LedState.LED_FAST
+        self.value = 0
 
     def __del__(self):
         self.led.close()
 
     def toggle(self):
-        if self.state == 1:
+        if self.value == 1:
             self.turnOff()
         else:
             self.turnOn()
 
     def turnOn(self):
         self.led.write('1')
+        self.led.flush()
+        self.value = 1
 
     def turnOff(self):
         self.led.write('0')
+        self.led.flush()
+        self.value = 0
 
     def loop(self):
         while 1:
             if ledEvent.wait(self.delay): # event fired, change state
-                self.state = ledState
-                if self.state == LedState.LED_FAST:
+                if ledState == LedState.LED_FAST:
                     self.delay = self.fast
-                elif self.state == LedState.LED_SLOW:
+                elif ledState == LedState.LED_SLOW:
                     self.delay = self.slow
-                elif self.state == LedState.LED_ON:
+                elif ledState == LedState.LED_ON:
                     self.delay = None
                     self.turnOn()
-                elif self.state == LedState.LED_OFF:
+                elif ledState == LedState.LED_OFF:
                     self.delay = None
                     self.turnOff()
                 else:
