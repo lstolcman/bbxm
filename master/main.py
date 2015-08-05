@@ -1,3 +1,4 @@
+import platform
 import struct
 import asyncore
 import socket
@@ -28,12 +29,13 @@ cfg = configparser.ConfigParser()
 
 
 class Button():
-    def __init__(self, buttonPath='/tmp/test'):
+    def __init__(self, buttonPath):
         self.button = None
         self.buttonPath = buttonPath
 
     def loop(self):
         with open(self.buttonPath, 'rb') as self.button:
+            print('bytn')
             evt = self.button.read(struct.calcsize('llHHI'))
             while evt:
                 tv_sec, tv_usec, key_type, key_code, key_value = struct.unpack('llHHI', evt)
@@ -49,7 +51,7 @@ class Button():
 
 
 class Led():
-    def __init__(self, slow=0.5, fast=0.1, ledPath='/tmp/test'):
+    def __init__(self, ledPath, slow=0.5, fast=0.1):
         self.led = open(ledPath, 'w')
         self.slow = slow
         self.fast = fast
@@ -60,7 +62,7 @@ class Led():
         self.led.close()
 
     def toggle(self):
-        if self.state is 1:
+        if self.state == 1:
             self.turnOff()
         else:
             self.turnOn()
@@ -75,14 +77,14 @@ class Led():
         while 1:
             if ledEvent.wait(self.delay): # event fired, change state
                 self.state = ledState
-                if self.state is LedState.LED_FAST:
+                if self.state == LedState.LED_FAST:
                     self.delay = self.fast
-                elif self.state is LedState.LED_SLOW:
+                elif self.state == LedState.LED_SLOW:
                     self.delay = self.slow
-                elif self.state is LedState.LED_ON:
+                elif self.state == LedState.LED_ON:
                     self.delay = None
                     self.turnOn()
-                elif self.state is LedState.LED_OFF:
+                elif self.state == LedState.LED_OFF:
                     self.delay = None
                     self.turnOff()
                 else:
@@ -108,17 +110,17 @@ class Packet():
     def parse(self):
         packetType = self.packet[0][0]
         packetNum = self.packet[0][1]
-        if packetType is 0x01: #STATUS
+        if packetType == 0x01: #STATUS
             packetState = self.packet[0][2]
             outputQueue.put((struct.pack('!BB', 0x02, self.packetNum), self.packet[1]))
             print('received status: ', end='')
-            if packetState is 0x01: #U-Boot
+            if packetState == 0x01: #U-Boot
                 print('U-Boot')
-            elif packetState is 0x02: #Linux
+            elif packetState == 0x02: #Linux
                 print('Linux')
             else:
                 print('Unknown')
-        elif packetType is 0x02: #RESPONSE
+        elif packetType == 0x02: #RESPONSE
             print('received response')
         else: #unknown
             raise TypeError('Unsupported header')
@@ -170,10 +172,13 @@ if __name__ == '__main__':
 
     async = Async(cfg.get('Common', 'Host'), cfg.getint('Common', 'Port'))
     packet = Packet()
-    #button = Button(cfg.get('Common', 'ButtonPath'))
-    button = Button()
-    #led = Led(cfg.get('Common', 'LedPath'))
-    led = Led()
+
+    if platform.machine() == 'armv7l': #beagle
+        button = Button(cfg.get('Common', 'ButtonPath'))
+        led = Led(cfg.get('Common', 'LedPath'))
+    else: #host computer
+        button = Button('/tmp/test')
+        led = Led('/tmp/testled')
 
     asyncThread = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
     packetThread = threading.Thread(target=packet.loop)
