@@ -17,15 +17,16 @@ class LedState(enum.Enum):
     SLOW = 3
 
 class SystemState(enum.Enum):
-    OFF = 0
+    OFF = 1
     UBOOT = 1
     LINUX = 2
+    PENDING = 3
+    NO_RESPONSE = 4
 
 
 inputQueue = queue.Queue()
 outputQueue = queue.Queue()
-
-ledState = queue.Queue()
+ledStateQueue = queue.Queue()
 
 
 
@@ -44,7 +45,7 @@ class Button():
             while evt:
                 tv_sec, tv_usec, key_type, key_code, key_value = struct.unpack('llHHI', evt)
                 if key_type == 1 and key_code == 276 and key_value == 0:
-                    ledState.put(LedState.OFF)
+                    ledStateQueue.put(LedState.SLOW)
                     print(evt)
                     print(tv_sec, tv_usec, key_type, key_code, key_value)
                     print('user key released')
@@ -56,7 +57,7 @@ class Button():
 
 
 class Led():
-    def __init__(self, ledPath, slow=0.15, fast=0.05):
+    def __init__(self, ledPath, slow=0.2, fast=0.05):
         self.led = open(ledPath, 'w')
         self.slow = slow
         self.fast = fast
@@ -86,7 +87,7 @@ class Led():
     def loop(self):
         while 1:
             try:
-                self.state = ledState.get(block=True, timeout=self.delay)
+                self.state = ledStateQueue.get(block=True, timeout=self.delay)
             except: # queue empty, timeout passed, normal blink
                 self.toggle()
             else: # change state as in queue
@@ -120,10 +121,10 @@ class Packet():
         self.packet = None
 
     def parse(self):
-        packetType = self.packet[0][0]
-        packetNum = self.packet[0][1]
+        packetType = self.packet[0]
+        packetNum = self.packet[1]
         if packetType == 0x01: #STATUS
-            packetState = self.packet[0][2]
+            packetState = self.packet[2]
             outputQueue.put((struct.pack('!BB', 0x02, self.packetNum), self.packet[1]))
             print('received status: ', end='')
             if packetState == 0x01: #U-Boot
@@ -159,21 +160,25 @@ class Async(asyncore.dispatcher):
         self.create_socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.packet = Packet()
         self.bind((host, port))
+        self.client = None
 
     def writable(self):
         return not outputQueue.empty()
 
     def handle_close(self):
         self.close()
+        print('close hand')
+        self.client = None
 
     def handle_read(self):
         data = self.recvfrom(1024)
-        inputQueue.put(data)
+        inputQueue.put(data[0])
+        self.client = data[1]
         print('handle_read: ', data)
 
     def handle_write(self):
         data = outputQueue.get()
-        sent = self.sendto(data[0], data[1])
+        sent = self.sendto(data[0], self.client)
         print('handle_write:', data)
 
 
