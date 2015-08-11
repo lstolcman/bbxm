@@ -17,7 +17,6 @@ cfg = configparser.ConfigParser()
 class Led():
     def __init__(self):
         self.__led = open("/sys/class/leds/beagleboard::usr0/brightness",'w')
-        self.delay = 3
         self.state = 0
         
     def loop(self):
@@ -67,25 +66,35 @@ class Packet():
     def __init__(self):
         self.packetNum = 0
         self.packet = None
+        self.last_status = 0x01
 
     def parse(self,packetType):
-
         if packetType is 0x01:
             print("Client status")
             if self.packet[0][2] is 0x01: #U-Boot                               
                 print('U-Boot')
                 ledQueue.put(0)
+                if self.last_status != 0x01:
+                    self.packer(0x02)
+                    self.last_status = 0x01
+                     
             elif self.packet[0][2] is 0x02: #Linux                              
                 print('Linux')
                 ledQueue.put(1)
-
+                if self.last_status != 0x02:
+                    self.packer(0x02)
+                    self.last_status = 0x02
+            
         if packetType is 0x02:
             print("Client response")
-
+            
+            
         if packetType is 0x03:
             print("Change status")
             if self.packet:
                 self.packer(0x03)
+                ## get response
+                ## get new status 
                 
         if packetType is 0x04:
             print("Get status")
@@ -133,18 +142,18 @@ if __name__ == '__main__':
 
     async = Async(cfg.get('Common', 'Host'), cfg.getint('Common', 'Port'))
     packet = Packet()
-    button = Button()
-    led = Led()
+    #button = Button()
+    #led = Led()
     
     asyncThread = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
     packetThread = threading.Thread(target=packet.loop)
-    buttonThread = threading.Thread(target=button.loop)
-    ledThread = threading.Thread(target=led.loop)
+   # buttonThread = threading.Thread(target=button.loop)
+    #ledThread = threading.Thread(target=led.loop)
     
     asyncThread.start()
     packetThread.start()
-    buttonThread.start()
-    ledThread.start()
+   # buttonThread.start()
+   # ledThread.start()
 
     print('mainloop')
     while 1:

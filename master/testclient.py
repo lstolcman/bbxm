@@ -10,6 +10,7 @@ import configparser
 
 inputQueue = queue.Queue()
 outputQueue = queue.Queue()
+sendQueue = queue.Queue()
 
 cfg = configparser.ConfigParser()
 
@@ -24,7 +25,7 @@ class Packet():
         if packetType is 0x03:
             print("Change status")
             outputQueue.put((struct.pack('!BBB', 0x01, self.packet[0][1], 0x02)))
-            #outputQueue.put((struct.pack('!BBB', 0x01, self.packetNum, 0x01), self.packet[1]))
+            #outputQueue.put((struct.pack('!BBB', 0x01, self.packet[0][1], 0x01)))
             
         if packetType is 0x04:
             print("Get status")
@@ -37,45 +38,49 @@ class Packet():
 
 
 class Client(asyncore.dispatcher):
-    def __init__(self, host='localhost', port=0):
+    def __init__(self, host, port):
         asyncore.dispatcher.__init__(self)
         self.create_socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.connect((host, port))
         outputQueue.queue.clear()
         self.packet = Packet()
         self.send_status()
-
+        
     def writable(self):
         return not outputQueue.empty()
 
     def handle_read(self):
+        sendQueue.put(1)
         data = self.recvfrom(1024)
         print("Handle read ", data[0])
         inputQueue.put(data)
         
     def handle_write(self):
+        #time.sleep(2)
         data = outputQueue.get()
         print("Handle write ", data)
         sent = self.send(data)      
         data = data[sent:]
 
     def send_status(self):
-        outputQueue.put((struct.pack('!BBB', 0x01, 0, 0x01)))
-
-       
+        rc = self.send(struct.pack('!BBB', 0x01, 0, 0x01))
         
 
+        
 if __name__ == '__main__':
 
     cfg.read('settings.ini')
     
-    client = Client(cfg.get('Common', 'Host'), cfg.getint('Common', 'Port'))
+    client = Client('localhost',9000)
     async = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
     async.start()
     
     packet = Packet()
     packetThread = threading.Thread(target=packet.loop)
     packetThread.start()
+
+
+        
     
 
 
