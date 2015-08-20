@@ -64,15 +64,22 @@ class Client(asyncore.dispatcher):
         data = data[sent:]
 
     def send_status(self):
-        rc = self.send(struct.pack('!BBB', 0x01, 0x00, 0x02))
-        
+        f = None
+        while not f:
+            try:
+                time.sleep(3)
+                print("Try init")
+                rc = self.send(struct.pack('!BBB', 0x01, 0x00, 0x02))
+                f = self.recvfrom(1024)
+            except:
+                print("Server is not responding")
 
         
 if __name__ == '__main__':
 
     cfg.read('settings.ini')
     
-    client = Client('localhost',9090)
+    client = Client('10.0.0.1',9090)
     async = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
     async.start()
     
