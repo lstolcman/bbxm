@@ -1,39 +1,88 @@
-import asyncore, socket, os
+import struct
+import asyncore
+import socket
+import threading
+import queue
+import time
+import configparser
+import enum
+import struct
+import os
 
-class AsyncoreServerUDP(asyncore.dispatcher):
-   
-   def __init__(self):
-      asyncore.dispatcher.__init__(self)
-      self.create_socket(socket.AF_INET, socket.SOCK_DGRAM)
-      self.bind(('', 8080))
-      self.buffer = ""
-      self.addr = ""
-      self.temp = True
-      print("Slave start..")
 
-   def handle_read(self):
-      self.buffer, self.addr = self.recvfrom(2048)
-      self.temp = not self.temp
-      
-      if self.temp:
-         os.system("echo 1 > /sys/class/leds/beagleboard::usr0/brightness")
-         print "1"
-      else:
-         os.system("echo 0 > /sys/class/leds/beagleboard::usr0/brightness")
-         print "0"
-         
-   def handle_write(self):
-      if self.buffer != "":
-          sent = self.sendto("Signal: "+self.buffer, (str(self.addr[0]), int(self.addr[1])))
-          self.buffer = self.buffer[sent:]
-          
-   def handle_close(self):
-      self.close()
-      
-if __name__ == "__main__":
-   
-   AsyncoreServerUDP()
-   asyncore.loop()
+inputQueue = queue.Queue()
+outputQueue = queue.Queue()
+sendQueue = queue.Queue()
+
+cfg = configparser.ConfigParser()
+
+class Packet():
+    def __init__(self):
+        self.packet = None
+
+    def parse(self,packetType):
+        if packetType is 0x02:
+            print("Server response")
+
+        if packetType is 0x03:
+            print("Change status")
+            outputQueue.put((struct.pack('!BB', 0x02, self.packet[0][1])))
+            os.system("shutdown now -r")
+            
+        if packetType is 0x04:
+            print("Get status")
+            outputQueue.put((struct.pack('!BBB', 0x01, self.packet[0][1], 0x02)))         
+
+    def loop(self):
+        while 1:
+            self.packet = inputQueue.get(block=True)
+            self.parse(self.packet[0][0])
+
+
+class Client(asyncore.dispatcher):
+    def __init__(self, host, port):
+        asyncore.dispatcher.__init__(self)
+        self.create_socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.connect((host, port))
+        outputQueue.queue.clear()
+        self.packet = Packet()
+        self.send_status()
+        
+    def writable(self):
+        return not outputQueue.empty()
+
+    def handle_read(self):
+        sendQueue.put(1)
+        data = self.recvfrom(1024)
+        print("Handle read ", data[0])
+        inputQueue.put(data)
+        
+    def handle_write(self):
+        data = outputQueue.get()
+        print("Handle write ", data)
+        sent = self.send(data)      
+        data = data[sent:]
+
+    def send_status(self):
+        rc = self.send(struct.pack('!BBB', 0x01, 0x00, 0x02))
+        
+
+        
+if __name__ == '__main__':
+
+    cfg.read('settings.ini')
+    
+    client = Client('localhost',9090)
+    async = threading.Thread(target=asyncore.loop, kwargs={'timeout':0.1, 'use_poll':True})
+    async.start()
+    
+    packet = Packet()
+    packetThread = threading.Thread(target=packet.loop)
+    packetThread.start()
+
+
+        
+    
 
 
 
